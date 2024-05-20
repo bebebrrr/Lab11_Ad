@@ -8,69 +8,53 @@ import math
 from multiprocessing import Process, Queue
 
 E = 10e-7
+results = [1]
 
-
+# считаем целевой ряд y
 def calc_sum(x):
     return math.exp(-(x**2))
 
+# считаем числитель и помещаем данные в res
+def calc_chis(x, res):
+    res.put(-x)
 
-def calc_chis(x, n, result_queue):
-    result_queue.put(calc_chis_helper(x, n))
-
-
-def calc_chis_helper(x, n):
-    return ((-1) ** n) * (x ** (2 * n))
-
-
-def calc_znam(n, result_queue):
-    result_queue.put(math.factorial(n))
-
+# считаем знаменатель и помещаем данные в res
+def calc_znam(n, res):
+    res.put(n + 1)
 
 def main():
-    x = -0.7
-    results = [1]  # Начальное значение ряда
-    result_queue = Queue()
+    x = 1
+    i = 0
+    while math.fabs(results[-1]) > E:
+        # создаём очереди для обмена данными между процессами 
+        chisq = Queue()
+        znamq = Queue()
 
-    processes = []
+        # Вычисляем числитель и знаменатель в отдельных потоках
+        pr1 = Process(target=calc_chis, args = (x, chisq))
+        pr2 = Process(target=calc_znam, args = (i, znamq))
 
-    i = 1
-    while True:
-        # Создаем процессы для вычисления числителя и знаменателя
-        chis_process = Process(target=calc_chis, args=(x, i, result_queue))
-        znam_process = Process(target=calc_znam, args=(i, result_queue))
+        pr1.start()
+        pr2.start()
 
-        # Запускаем процессы
-        chis_process.start()
-        znam_process.start()
+        pr1.join()
+        pr2.join()
 
-        # Добавляем процессы в список для последующего ожидания их завершения
-        processes.append(chis_process)
-        processes.append(znam_process)
+        # извлекаем значения из очередей перед дальнейшей обработкой
+        chis = chisq.get()
+        znam = znamq.get()
 
-        # Получаем результаты из очереди
-        chis = result_queue.get()
-        znam = result_queue.get()
-
-        # Проверяем условие остановки
-        if abs(chis / znam) < E:
-            break
-
-        # Добавляем результаты в список
-        results.append(chis)
-        results.append(znam)
+        if chis and znam:
+            cur = chis / znam
+            results.append(cur * results[-1])
 
         i += 1
-
-    # Ожидаем завершения всех процессов
-    for process in processes:
-        process.join()
 
     y = calc_sum(x)
     calculated_sum = sum(results)
     print(f"x = {x}")
     print(f"Ожидаемое значение y = {y}")
     print(f"Подсчитанное значение суммы ряда = {calculated_sum}")
-
 
 if __name__ == "__main__":
     main()
